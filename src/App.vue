@@ -7,12 +7,16 @@
       <div class="video-item">
         <ry-video :width="width" :height="height" :src="src1" :poster="poster1" :on-play="onPlay"></ry-video>
       </div>
+      <div class="video-item">
+        <div id="video-container"></div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import RyVideo from './components/RyVideo'
+import Vue from 'vue'
+import RyVideo from './components/RyVideo.vue'
 export default {
   name: 'app',
   components: {
@@ -26,6 +30,25 @@ export default {
       poster1: 'http://7xj610.com1.z0.glb.clouddn.com/masami.png',
       src: 'http://ocphdh79p.bkt.clouddn.com/TRF-SPORT.st.mp4',
       poster: 'http://ocphdh79p.bkt.clouddn.com/masami-a.png'
+    }
+  },
+  mounted() {
+    const vm = this
+    const el = document.querySelector('#video-container')
+    if (el) {
+      new Vue({
+        el: el,
+        render(h) {
+          return h(RyVideo, {
+            props: {
+              width: vm.width,
+              height: vm.height,
+              src: vm.src,
+              poster: vm.poster
+            }
+          })
+        }
+      })
     }
   },
   methods: {
@@ -44,12 +67,19 @@ export default {
 body {
   margin: 0;
   padding: 0;
-}
-#app {
-  font-family: Helvetica, Arial, sans-serif;
+  font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen,Ubuntu,Cantarell,Open Sans,Helvetica Neue,sans-serif;
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #2c3e50;
+  -moz-font-feature-settings: "liga" on;
+  font-size: 14px;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.4;
+  letter-spacing: 0;
+  color: #4a4a4a;
+  background-color: #fafafa;
+  word-break: break-all;
 }
 .content {
   max-width: 375px;

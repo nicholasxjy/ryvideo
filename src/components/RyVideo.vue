@@ -2,19 +2,20 @@
   <div class="ryvideo" :class="{fullscreen: isFullScreen}">
     <div class="ryvideo-body">
       <div class="ryvideo-container" :style="`width: ${width}px;height: ${height}px;`">
-        <video :poster="poster" :src="src" preload="true" :width="width" :height="height" ref="video" playsinline>
+        <video :width="width" :height="height" ref="video" playsinline>
           <p>we believe you need to upgrade your browser :)</p>
         </video>
         <div class="ryvideo-controls">
           <div class="ryvideo-controls-inner">
             <div class="ryvideo-controls-play-pause">
-              <a class="ryvideo-controls-play" @click="onVideoPlay" v-if="!isPlaying"></a>
-              <a class="ryvideo-controls-pause" @click="onVideoPause" v-if="isPlaying"></a>
+              <a class="ryvideo-controls-play" @click="handlePlay" v-if="!isPlaying"></a>
+              <a class="ryvideo-controls-pause" @click="handlePause" v-if="isPlaying"></a>
             </div>
             <span class="ryvideo-controls-currenttime">{{currentTime}}</span>
-            <div class="ryvideo-progress" ref="progress">
-              <span class="ryvideo-progress-active" @click="setBackTo" :style="{width: activeProgress + '%'}"></span>
-              <input type="range" class="ryvideo-progress-bar" min="0" :max="progressMax" value="0" ref="slider" v-model="progressValue">
+            <div class="ryvideo-progress">
+              <span class="ryvideo-progress-active" @click="setBackTo" :style="{width: activeProgress + 'px'}"></span>
+              <div class="ryvideo-progress-bar" ref="progress" @click="setBackTo"></div>
+              <span class="ryvideo-progress-slider" ref="slider" :style="{left: sliderLeft + 'px'}" @touchstart="handleSliderDown" @mousedown="handleSliderDown"></span>
             </div>
             <span class="ryvideo-duration">{{duration}}</span>
             <a class="ryvideo-controls-fullscreen" @click="toggleFullScreen"></a>
@@ -26,7 +27,6 @@
 </template>
 
 <script>
-  import enableInlineVideo from 'iphone-inline-video'
   export default {
     name: 'RyVideo',
     props: {
@@ -51,12 +51,6 @@
       },
       onPause: {
         type: Function
-      },
-      onFullScreen: {
-        type: Function
-      },
-      offFullScreen: {
-        type: Function
       }
     },
     data() {
@@ -64,67 +58,38 @@
         currentTime: '00:00',
         duration: '00:00',
         progressValue: 0,
+        activeProgress: 0,
+        sliderLeft: 0,
         isPlaying: false,
         progressMax: 0,
         isFullScreen: false
       }
     },
-    watch: {
-      progressValue(val) {
-        const videoEle = this.$refs.video
-        if (parseInt(val) !== parseInt(videoEle.currentTime)) {
-          videoEle.currentTime = val
-        }
-      }
-    },
     mounted() {
       const videoEle = this.$refs.video
-      // enable playsinline
-      enableInlineVideo(videoEle)
-      videoEle.addEventListener('loadeddata', () => {
-        this.progressMax = parseInt(videoEle.duration)
-        this.duration = this.formatTime(videoEle.duration)
-      })
-      videoEle.addEventListener('timeupdate', () => {
-        this.currentTime = this.formatTime(videoEle.currentTime)
-        this.progressValue = videoEle.currentTime
-      })
+      const sliderEle = this.$refs.slider
+
+      // check
+      videoEle.poster = this.poster
+      videoEle.src = this.src
+      // bind events
+      videoEle.addEventListener('loadeddata', this.handleLoadedData, false)
+      videoEle.addEventListener('timeupdate', this.handleTimeupdate, false)
+      videoEle.addEventListener('progress', this.handleVideoProgress, false)
+
       videoEle.addEventListener('play', () => {
         if (!this.isPlaying) {
           this.isPlaying = true
         }
       })
+
       videoEle.addEventListener('pause', () => {
         if (this.isPlaying) {
           this.isPlaying = false
         }
       })
     },
-    computed: {
-      activeProgress() {
-        if (parseFloat(this.progressValue / this.progressMax) * 100 > 100) {
-          return 100
-        }
-        return parseFloat(this.progressValue / this.progressMax) * 100
-      }
-    },
     methods: {
-      onVideoPlay() {
-        if (this.onPlay && typeof this.onPlay === 'function') {
-          this.onPlay(this.$refs.video)
-        } else {
-          this.$refs.video.play()
-          this.isPlaying = true
-        }
-      },
-      onVideoPause() {
-        if (this.onPause && typeof this.onPause === 'function') {
-          this.onPause(this.$refs.video)
-        } else {
-          this.$refs.video.pause()
-          this.isPlaying = false
-        }
-      },
       formatTime(num) {
         const temp = parseFloat(num)
         let secs = parseInt(temp % 60)
@@ -132,6 +97,38 @@
         secs = `0${secs}`.slice(-2)
         mins = `0${mins}`.slice(-2)
         return `${mins}:${secs}`
+      },
+      calculateSliderLeft() {
+        const sliderEle = this.$refs.slider
+        if (sliderEle) {
+          const sliderRect = sliderEle.getBoundingClientRect()
+          if (this.activeProgress > sliderRect.width / 2) {
+            return this.activeProgress - sliderRect.width / 2
+          }
+        }
+        return 0
+      },
+      handlePlay() {
+        if (this.onPlay && typeof this.onPlay === 'function') {
+          this.onPlay(this.$refs.video)
+        } else {
+          this.$refs.video.play()
+          this.isPlaying = true
+        }
+      },
+      handlePause() {
+        if (this.onPause && typeof this.onPause === 'function') {
+          this.onPause(this.$refs.video)
+        } else {
+          this.$refs.video.pause()
+          this.isPlaying = false
+        }
+      },
+      handleSliderChange(e) {
+        const slider = this.$refs.slider
+        const videoEle = this.$refs.video
+        this.activeProgress = parseFloat(slider.value / videoEle.duration) * 100
+        videoEle.currentTime = slider.value
       },
       setBackTo(e) {
         const offsetX = e.offsetX
@@ -141,29 +138,69 @@
         videoEle.currentTime = parseFloat(offsetX / rect.width) * videoEle.duration
       },
       toggleFullScreen() {
-        if (this.isFullScreen) {
-          if (this.offFullScreen && typeof this.offFullScreen === 'function') {
-            this.offFullScreen(this.$refs.video)
-          }
-        } else {
-          if (this.onFullScreen && typeof this.onFullScreen === 'function') {
-            this.onFullScreen(this.$refs.video)
-          }
-        }
         this.isFullScreen = !this.isFullScreen
+      },
+      handleLoadedData() {
+        const videoEle = this.$refs.video
+        this.duration = this.formatTime(videoEle.duration)
+      },
+      handleTimeupdate() {
+        const videoEle = this.$refs.video
+        const progressEle = this.$refs.progress
+        const progressRect = progressEle.getBoundingClientRect()
+        const currentTime = videoEle.currentTime
+        const duration = videoEle.duration
+        this.activeProgress = parseFloat(currentTime / duration) * progressRect.width
+        this.sliderLeft = this.calculateSliderLeft()
+        this.currentTime = this.formatTime(videoEle.currentTime)
+      },
+      handleVideoProgress(e) {
+        const videoEle = this.$refs.video
+        const tr = videoEle.buffered
+      },
+      handleSliderDown() {
+        // here need to bind the mousemove touchmove to document
+        document.addEventListener('mousemove', this.handleSliderMove, false)
+        document.addEventListener('touchmove', this.handleSliderMove, false)
+
+        // add remove listener
+        document.addEventListener('mouseup', this.handleSliderUp, false)
+        document.addEventListener('touchend', this.handleSliderUp, false)
+      },
+      handleSliderUp() {
+        document.removeEventListener('mousemove', this.handleSliderMove, false)
+        document.removeEventListener('touchmove', this.handleSliderMove, false)
+      },
+      handleSliderMove(e) {
+        // here should handle mouse and touch type events
+        let pageX
+        if (e.type === 'mousemove') {
+          pageX = e.pageX
+        }
+        if (e.type === 'touchmove') {
+          pageX = e.touches[0].pageX
+        }
+        const videoEle = this.$refs.video
+        const progressEle = this.$refs.progress
+        const rect = progressEle.getBoundingClientRect()
+        let offset = pageX - rect.left
+        if (offset < 0) {
+          offset = 0
+        }
+        if (offset > rect.width) {
+          offset = rect.width
+        }
+        this.activeProgress = offset
+        this.sliderLeft = this.calculateSliderLeft()
+        videoEle.currentTime = parseFloat(offset / rect.width) * videoEle.duration
       }
     }
   }
 </script>
 
 <style lang="scss" scoped>
-  .IIV::-webkit-media-controls-play-button,
-  .IIV::-webkit-media-controls-start-playback-button {
-    opacity: 0;
-    pointer-events: none;
-    width: 5px;
-  }
   .ryvideo {
+    user-select: none;
     &.fullscreen {
       position: fixed;
       top: 0;
@@ -237,6 +274,7 @@
     padding-left: 10px;
     padding-right: 10px;
     color: #fff;
+    width: 30px;
   }
   .ryvideo-progress {
     flex: 1 1;
@@ -244,84 +282,39 @@
     align-items: center;
     position: relative;
     z-index: 1200;
-    .ryvideo-progress-active {
-      position: absolute;
-      left: 0;
-      z-index: 1300;
-      height: 2px;
-      background-color: #1478F0;
-      cursor: pointer;
-    }
-    input[type=range] {
-      -webkit-appearance: none;
-      width: 100%;
-      background: #d2d2d2;
-      height: 2px;
-      margin: 0;
-      padding: 0;
-    }
-
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-    }
-
-    input[type=range]:focus {
-      outline: none;
-    }
-
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      height: 15px;
-      width: 15px;
-      border-radius: 50%;
-      background: #ffffff;
-      cursor: pointer;
-      margin-top: -7px;
-      position: relative;
-      z-index: 1400;
-    }
-    input[type=range]::-moz-range-thumb {
-      height: 15px;
-      width: 15px;
-      border-radius: 50%;
-      background: #ffffff;
-      cursor: pointer;
-      margin-top: -7px;
-      position: relative;
-      z-index: 1400;
-    }
-    input[type=range]::-ms-thumb {
-      height: 15px;
-      width: 15px;
-      border-radius: 50%;
-      background: #ffffff;
-      cursor: pointer;
-      margin-top: -7px;
-      position: relative;
-      z-index: 1400;
-    }
-
-    input[type=range]::-webkit-slider-runnable-track {
-      width: 100%;
-      height: 2px;
-      cursor: pointer;
-      background: #d2d2d2;
-    }
-    input[type=range]:focus::-webkit-slider-runnable-track {
-      background: #d2d2d2;
-    }
-    input[type=range]::-moz-range-track {
-      width: 100%;
-      height: 2px;
-      cursor: pointer;
-      background: #d2d2d2;
-    }
-    input[type=range]::-ms-track {
-      width: 100%;
-      height: 2px;
-      cursor: pointer;
-      background: #d2d2d2;
-      color: transparent;
-    }
+    height: 20px;
+  }
+  .ryvideo-progress-active {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    z-index: 1300;
+    height: 2px;
+    background-color: #1478F0;
+    cursor: pointer;
+  }
+  .ryvideo-progress-bar {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 2px;
+    background-color: #d2d2d2;
+    width: 100%;
+    z-index: 1250;
+    cursor: pointer;
+  }
+  .ryvideo-progress-slider {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    display: block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #fff;
+    transform: translateY(-50%);
+    z-index: 1400;
   }
 </style>
