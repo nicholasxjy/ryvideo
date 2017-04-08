@@ -57,11 +57,9 @@
       return {
         currentTime: '00:00',
         duration: '00:00',
-        progressValue: 0,
         activeProgress: 0,
         sliderLeft: 0,
         isPlaying: false,
-        progressMax: 0,
         isFullScreen: false
       }
     },
@@ -88,6 +86,12 @@
           this.isPlaying = false
         }
       })
+    },
+    beforeDestroy() {
+      document.removeEventListener('mouseup', this.handleSliderUp, false)
+      document.removeEventListener('touchend', this.handleSliderUp, false)
+      document.removeEventListener('mousemove', this.handleSliderMove, false)
+      document.removeEventListener('touchmove', this.handleSliderMove, false)
     },
     methods: {
       formatTime(num) {
